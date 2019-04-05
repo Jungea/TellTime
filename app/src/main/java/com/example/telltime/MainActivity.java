@@ -1,11 +1,15 @@
 /*
  * 작성자: 정은애
- * 작성일: 2019.04.03.
- * 스톱워치
+ * 작성일: 2019.04.05.
+ * 화면 ON/OFF 시 기능 구현
  */
 
 package com.example.telltime;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -16,6 +20,7 @@ import android.text.method.ScrollingMovementMethod;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -35,6 +40,8 @@ public class MainActivity extends AppCompatActivity {
     long pauseTime;  //중지버튼을 눌렀을 때 시각
     long pre = 0;  //전 시간기록
 
+    final long ResetTime = 5000;  //초기화 시간
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -46,6 +53,73 @@ public class MainActivity extends AppCompatActivity {
         record.setMovementMethod(new ScrollingMovementMethod());
         startBtn = (Button) findViewById(R.id.startBtn);
         recBtn = (Button) findViewById(R.id.resBtn);
+
+
+        IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_ON);
+        filter.addAction(Intent.ACTION_SCREEN_OFF);
+        registerReceiver(br, filter);
+    }
+
+    private BroadcastReceiver br = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+
+            if (intent.getAction() == Intent.ACTION_SCREEN_ON) {
+                Toast.makeText(context, "화면ON", Toast.LENGTH_SHORT).show();
+
+                if (current == Pause) {
+                    long continueTime = SystemClock.elapsedRealtime();
+                    timer.sendEmptyMessage(0);
+                    long dif = continueTime - pauseTime;
+
+                    if (dif >= ResetTime) {  // 화면이 꺼진 시간이 초기화 시간이상일 때
+                        timer.removeMessages(0);  //Handler 실행 중지
+
+                        timeOutput.setText("00:00:00");
+                        record.setText("");
+
+                        startBtn.setText("시작");
+                        recBtn.setText("기록");
+                        recBtn.setEnabled(false);
+
+                        current = Init;
+                        count = 1;
+
+                    } else {
+                        baseTime += dif;
+                        startBtn.setText("중지");
+                        recBtn.setText("기록");
+                        current = Run;  //[현재상태 : 실행]
+                    }
+                }
+
+                if (current == Init) { //00:00:00에서 시작버튼을 누른경우
+                    baseTime = SystemClock.elapsedRealtime();
+                    timer.sendEmptyMessage(0); // Handler 실행(id=0);
+                    startBtn.setText("중지");  //시작버튼이 중지버튼으로 변경
+                    recBtn.setEnabled(true);  //기록버튼 활성화
+                    current = Run; //[현재상태 : 실행]
+                }
+
+            } else {
+                Toast.makeText(context, "화면OFF", Toast.LENGTH_SHORT).show();
+                if (current == Run) { //실행중에 중지버튼을 누른경우
+                    timer.removeMessages(0);  //Handler 실행 중지
+                    pauseTime = SystemClock.elapsedRealtime();
+                    startBtn.setText("계속");
+                    recBtn.setText("초기화");
+                    current = Pause; //[현재상태 : 중지]
+                }
+            }
+
+        }
+
+    };
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unregisterReceiver(br);
     }
 
     public void myOnClick(View view) {
@@ -69,9 +143,9 @@ public class MainActivity extends AppCompatActivity {
                         break;
 
                     case Pause:   //중지상태일 때 계속버튼을 누른경우
-                        long now = SystemClock.elapsedRealtime();
+                        long continueTime = SystemClock.elapsedRealtime();
                         timer.sendEmptyMessage(0);
-                        baseTime += (now - pauseTime);
+                        baseTime += (continueTime - pauseTime);
                         startBtn.setText("중지");
                         recBtn.setText("기록");
                         current = Run;  //[현재상태 : 실행]
@@ -83,6 +157,8 @@ public class MainActivity extends AppCompatActivity {
                 switch (current) {
                     case Run:  //기록버튼 클릭
                         long plus = getTime() - pre;  //전 기록과 시간차이
+                        String sk = Long.toString(plus);
+                        Toast.makeText(this, sk, Toast.LENGTH_SHORT).show();
 
                         String s = record.getText().toString();
                         s = String.format("%d. %s    + %s\n", count++, formatTime(getTime()), formatTime(plus)) + s;
