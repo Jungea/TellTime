@@ -1,7 +1,5 @@
 /*
  * 작성자: 정은애
- * 작성일: 2019.04.05.
- * 화면 ON/OFF 시 기능 구현
  */
 
 package com.example.telltime;
@@ -16,29 +14,22 @@ import android.os.Message;
 import android.os.SystemClock;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
-import android.text.method.ScrollingMovementMethod;
-import android.view.View;
-import android.widget.Button;
 import android.widget.TextView;
-import android.widget.Toast;
 
 
 public class MainActivity extends AppCompatActivity {
-    TextView timeOutput;  //시간 출력 뷰
-    TextView record;  //기록 출력 뷰
-    Button startBtn;  //시작버튼
-    Button recBtn;  //기록버튼
+    TextView timeView;  //시간 출력 뷰
+    TextView totalTimeView;  //전체 시간
 
     //상태
+    int current = Init;
     final static int Init = 0;  //초기
     final static int Run = 1;  //실행
     final static int Pause = 2;  //중지
 
-    int current = Init;
-    int count = 1;  //기록 갯수
     long baseTime;  //처음시각
     long pauseTime;  //중지버튼을 눌렀을 때 시각
-    long pre = 0;  //전 시간기록
+    long totalTime = 0;  //전체 사용시간
 
     final long ResetTime = 5000;  //초기화 시간
 
@@ -48,12 +39,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         //뷰 저장
-        timeOutput = (TextView) findViewById(R.id.timeOutput);
-        record = (TextView) findViewById(R.id.record);
-        record.setMovementMethod(new ScrollingMovementMethod());
-        startBtn = (Button) findViewById(R.id.startBtn);
-        recBtn = (Button) findViewById(R.id.resBtn);
-
+        timeView = (TextView) findViewById(R.id.timeView);
+        totalTimeView = (TextView) findViewById(R.id.totalTimeView);
 
         IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_ON);
         filter.addAction(Intent.ACTION_SCREEN_OFF);
@@ -65,49 +52,33 @@ public class MainActivity extends AppCompatActivity {
         public void onReceive(Context context, Intent intent) {
 
             if (intent.getAction() == Intent.ACTION_SCREEN_ON) {
-                Toast.makeText(context, "화면ON", Toast.LENGTH_SHORT).show();
 
                 if (current == Pause) {
-                    long continueTime = SystemClock.elapsedRealtime();
+                    long continueTime = SystemClock.elapsedRealtime();  //다시 화면이 켜진 때
                     timer.sendEmptyMessage(0);
-                    long dif = continueTime - pauseTime;
+                    long diff = continueTime - pauseTime; //꺼진 시간
 
-                    if (dif >= ResetTime) {  // 화면이 꺼진 시간이 초기화 시간이상일 때
-                        timer.removeMessages(0);  //Handler 실행 중지
-
-                        timeOutput.setText("00:00:00");
-                        record.setText("");
-
-                        startBtn.setText("시작");
-                        recBtn.setText("기록");
-                        recBtn.setEnabled(false);
-
+                    if (diff >= ResetTime) {  // 화면이 꺼진 시간이 초기화 시간이상일 때
+                        timeView.setText("00:00:00");
+                        totalTime += pauseTime - baseTime;  //전 화면에 켜있던 시간
                         current = Init;
-                        count = 1;
 
                     } else {
-                        baseTime += dif;
-                        startBtn.setText("중지");
-                        recBtn.setText("기록");
+                        baseTime += diff;
                         current = Run;  //[현재상태 : 실행]
                     }
                 }
 
-                if (current == Init) { //00:00:00에서 시작버튼을 누른경우
+                if (current == Init) {
                     baseTime = SystemClock.elapsedRealtime();
                     timer.sendEmptyMessage(0); // Handler 실행(id=0);
-                    startBtn.setText("중지");  //시작버튼이 중지버튼으로 변경
-                    recBtn.setEnabled(true);  //기록버튼 활성화
                     current = Run; //[현재상태 : 실행]
                 }
 
             } else {
-                Toast.makeText(context, "화면OFF", Toast.LENGTH_SHORT).show();
-                if (current == Run) { //실행중에 중지버튼을 누른경우
+                if (current == Run) { // 실행 중일 때 화면이 꺼진경우
                     timer.removeMessages(0);  //Handler 실행 중지
                     pauseTime = SystemClock.elapsedRealtime();
-                    startBtn.setText("계속");
-                    recBtn.setText("초기화");
                     current = Pause; //[현재상태 : 중지]
                 }
             }
@@ -122,73 +93,11 @@ public class MainActivity extends AppCompatActivity {
         unregisterReceiver(br);
     }
 
-    public void myOnClick(View view) {
-        switch (view.getId()) {
-            case R.id.startBtn:  //첫번째버튼 클릭시(시작, 중지)
-                switch (current) {
-                    case Init:  //00:00:00에서 시작버튼을 누른경우
-                        baseTime = SystemClock.elapsedRealtime();
-                        timer.sendEmptyMessage(0); // Handler 실행(id=0);
-                        startBtn.setText("중지");  //시작버튼이 중지버튼으로 변경
-                        recBtn.setEnabled(true);  //기록버튼 활성화
-                        current = Run; //[현재상태 : 실행]
-                        break;
-
-                    case Run:  //실행중에 중지버튼을 누른경우
-                        timer.removeMessages(0);  //Handler 실행 중지
-                        pauseTime = SystemClock.elapsedRealtime();
-                        startBtn.setText("계속");
-                        recBtn.setText("초기화");
-                        current = Pause; //[현재상태 : 중지]
-                        break;
-
-                    case Pause:   //중지상태일 때 계속버튼을 누른경우
-                        long continueTime = SystemClock.elapsedRealtime();
-                        timer.sendEmptyMessage(0);
-                        baseTime += (continueTime - pauseTime);
-                        startBtn.setText("중지");
-                        recBtn.setText("기록");
-                        current = Run;  //[현재상태 : 실행]
-                        break;
-                }
-                break;
-
-            case R.id.resBtn:  //두번째버튼 클릭시
-                switch (current) {
-                    case Run:  //기록버튼 클릭
-                        long plus = getTime() - pre;  //전 기록과 시간차이
-                        String sk = Long.toString(plus);
-                        Toast.makeText(this, sk, Toast.LENGTH_SHORT).show();
-
-                        String s = record.getText().toString();
-                        s = String.format("%d. %s    + %s\n", count++, formatTime(getTime()), formatTime(plus)) + s;
-                        record.setText(s);
-
-                        pre = getTime();
-                        break;
-
-                    case Pause:  //초기화 버튼 클릭
-                        timer.removeMessages(0);  //Handler 실행 중지
-
-                        timeOutput.setText("00:00:00");
-                        record.setText("");
-
-                        startBtn.setText("시작");
-                        recBtn.setText("기록");
-                        recBtn.setEnabled(false);
-
-                        current = Init;
-                        count = 1;
-                        break;
-                }
-                break;
-        }
-    }
-
     Handler timer = new Handler() {  //시간갱신을 반복
         @Override
         public void handleMessage(Message msg) {
-            timeOutput.setText(formatTime(getTime()));
+            timeView.setText(timeFormat(getTime("base")));
+            totalTimeView.setText(timeFormat(getTime("total")));
 
             //Handler 반복 실행
             timer.sendEmptyMessage(0);
@@ -196,16 +105,18 @@ public class MainActivity extends AppCompatActivity {
     };
 
     //현재시간을 계속 구하여 리턴
-    public long getTime() {
+    public long getTime(String timeName) {
         long now = SystemClock.elapsedRealtime(); //갱신할 때 현재 시각
         long outTime = now - baseTime;
+        if (timeName.equals("total"))
+            outTime += totalTime;
 
         return outTime;
     }
 
     //해당 형태로 시간을 변경
-    public String formatTime(long outTime) {
-        String easy_outTime = String.format("%02d:%02d:%02d", outTime / 1000 / 60, (outTime / 1000) % 60, (outTime % 1000) / 10);
-        return easy_outTime;
+    public String timeFormat(long outTime) {
+        String format = String.format("%02d:%02d:%02d", outTime / (1000 * 60 * 60) % 24, (outTime / 1000 * 60) % 60, (outTime / 1000) % 60);
+        return format;
     }
 }
